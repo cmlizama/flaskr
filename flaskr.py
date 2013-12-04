@@ -19,11 +19,18 @@ app.config.from_object(__name__)
 def connect_db():
 	return sqlite3.connect(app.config['DATABASE'])
 
+#this makes the db tables
 def init_db():
-	with closing(connect_db()) as db:
-		with app.open_resource('schema.sql', mode='r') as f:
-			db.cursor().executescript(f.read())
-		db.commit()
+    with app.app_context():
+    	db = get_db()
+    	with app.open_resource('schema.sql', mode='r') as f:
+    		db.cursor().executescript(f.read())
+    	db.commit()
+
+def get_db():
+    if not hasattr(g, 'sqlite_db'):
+        g.sqlite_db = connect_db()
+    return g.sqlite_db
 
 @app.before_request
 def before_request():
@@ -37,9 +44,10 @@ def teardown_request(exception):
 
 @app.route('/')
 def show_entries():
-	cur = g.db.execute('select title, text from entries order by id desc')
-	entries = [dict(title=row[0], text=row[1]) for row in cur.fetchall()]
-	return render_template('show_entries.html', entries=entries)
+    db = get_db()
+    cur = db.execute('select title, text from entries order by id desc')
+    entries = cur.fetchall()
+    return render_template('show_entries.html', entries=entries)
 
 @app.route('/add', methods=['POST'])
 def add_entry():
